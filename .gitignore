@@ -1,3 +1,9 @@
+# Environment
+.env
+
+# Build logs
+backend.log
+
 # Python
 __pycache__/
 *.pyc
@@ -20,3 +26,9 @@ uploads/
 
 # Frontend
 node_modules/
+dist/
+build/
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
