@@ -66,6 +66,26 @@ export const studentApi = {
     verifyPayment: (data) => api.post('/payments/verify', data),
     // Google Integration
     getGoogleAuthUrl: (studentId) => api.get(`/integrations/google/auth?student_id=${studentId}`),
+    // Profile APIs
+    getProfile: (studentId) => api.get(`/profile/${studentId}`),
+    uploadPhoto: (studentId, file) => {
+        const formData = new FormData();
+        formData.append('student_id', studentId);
+        formData.append('photo', file);
+        return api.post('/profile/photo', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
+    },
+    updateBio: (studentId, bio) => api.put(`/profile/${studentId}/bio`, { bio }),
+    updateEmail: (email) => api.post('/profile/email/update', { new_email: email }),
+    verifyEmail: (email, code) => api.post('/profile/email/verify', { email, code }),
+    updatePhone: (studentId, phone) => api.put(`/profile/${studentId}/phone`, { phone }),
+    // ID Card
+    getIdCard: (studentId) => api.get(`/student/id-card/${studentId}`),
+    generateIdCard: (studentId) => api.post('/student/generate-id-card', { student_id: studentId }),
+    // Administrative
+    registerStudent: (data) => api.post('/student/create', data),
+    getAllStudents: () => api.get('/admin/all-students'),
 };
 
 export default api;

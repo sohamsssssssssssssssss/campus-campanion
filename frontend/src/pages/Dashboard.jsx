@@ -310,27 +310,25 @@ export default function Dashboard() {
                 </p>
             </div>
 
-            {/* Google Calendar Sync Widget */}
-            <div className="bg-surface-card border border-line rounded-xl p-6 mb-8 flex items-center justify-between">
+            {/* Timetable Widget */}
+            <div className="bg-surface-card border border-line rounded-xl p-6 mb-8 flex items-center justify-between group cursor-pointer hover:bg-surface-hover transition-colors"
+                onClick={() => navigate('/timetable')}
+            >
                 <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-accent/20 rounded-xl flex items-center justify-center text-accent">
+                    <div className="w-12 h-12 bg-accent/20 rounded-xl flex items-center justify-center text-accent group-hover:scale-110 transition-transform">
                         <Calendar size={24} />
                     </div>
                     <div>
-                        <h3 className="font-bold">Google Calendar</h3>
+                        <h3 className="font-bold">Class Timetable</h3>
                         <p className="text-sm text-content-muted">
-                            {isCalendarSynced ? 'Last synced: Just now' : 'Sync your deadlines & timetable'}
+                            View your weekly schedule for COMP-B
                         </p>
                     </div>
                 </div>
                 <button
-                    onClick={handleGoogleSync}
-                    className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${isCalendarSynced
-                        ? 'bg-success/10 text-success border border-success/20'
-                        : 'bg-accent text-white hover:bg-accent-hover shadow-lg shadow-accent/20'
-                        }`}
+                    className="px-6 py-2 rounded-lg text-sm font-bold bg-accent text-white hover:bg-accent-hover shadow-lg shadow-accent/20 transition-all"
                 >
-                    {isCalendarSynced ? 'CONNECTED' : 'CONNECT'}
+                    VIEW SCHEDULE
                 </button>
             </div>
 

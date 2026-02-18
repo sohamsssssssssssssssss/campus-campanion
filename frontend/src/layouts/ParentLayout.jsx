@@ -17,7 +17,7 @@ const ParentLayout = () => {
     const handleLogout = () => {
         localStorage.removeItem('cc_parent_token');
         localStorage.removeItem('cc_parent');
-        navigate('/parent-login');
+        navigate('/login');
     };
 
     const handleSOS = async () => {
@@ -43,7 +43,6 @@ const ParentLayout = () => {
         { path: '/parent/academics', label: 'Academics', icon: GraduationCap },
         { path: '/parent/location', label: 'Location', icon: MapPin },
         { path: '/parent/alerts', label: 'Alerts', icon: Bell },
-        { path: '/parent/mentor', label: 'Mentor', icon: User },
     ];
 
     return (

@@ -39,10 +39,36 @@ class Database:
                 email TEXT UNIQUE NOT NULL,
                 department TEXT,
                 progress INTEGER DEFAULT 0,
+                profile_picture_type TEXT DEFAULT 'avatar',
+                profile_photo_url TEXT,
+                avatar_style TEXT DEFAULT 'adventurer',
+                avatar_background TEXT DEFAULT 'b6e3f4',
+                bio TEXT,
+                phone TEXT,
                 created_at TEXT,
                 updated_at TEXT
             )
         ''')
+        
+        # Ensure migration for existing students table
+        try:
+            cursor.execute("ALTER TABLE students ADD COLUMN bio TEXT")
+        except: pass
+        try:
+            cursor.execute("ALTER TABLE students ADD COLUMN phone TEXT")
+        except: pass
+        try:
+            cursor.execute("ALTER TABLE students ADD COLUMN id_card_generated INTEGER DEFAULT 0")
+        except: pass
+        try:
+            cursor.execute("ALTER TABLE students ADD COLUMN id_card_generated_at TEXT")
+        except: pass
+        try:
+            cursor.execute("ALTER TABLE students ADD COLUMN id_card_path TEXT")
+        except: pass
+        try:
+            cursor.execute("ALTER TABLE students ADD COLUMN id_card_tagline TEXT")
+        except: pass
         
         # Documents table
         cursor.execute('''
@@ -322,60 +348,49 @@ class Database:
                 department="Computer Engineering",
                 student_id="demo_student"
             )
-    
-    def create_student(
-        self,
-        name: str,
-        email: str,
-        department: str,
-        student_id: Optional[str] = None
-    ) -> str:
-        """Create a new student profile"""
-        if not student_id:
-            student_id = str(uuid.uuid4())
-        
-        now = datetime.now().isoformat()
+
+    def get_all_students(self) -> List[Dict]:
+        """Fetch all student records"""
         cursor = self.conn.cursor()
+        cursor.execute('SELECT id, name, email, department, created_at FROM students ORDER BY created_at DESC')
+        rows = cursor.fetchall()
+        return [{"id": r[0], "name": r[1], "email": r[2], "department": r[3], "created_at": r[4]} for r in rows]
+
+    def create_student(self, name: str, email: str, department: str = "Unassigned") -> Optional[str]:
+        """Create a new student account"""
+        cursor = self.conn.cursor()
+        student_id = f"STU{uuid.uuid4().hex[:6].upper()}"
+        now = datetime.now().isoformat()
         
         try:
             cursor.execute('''
                 INSERT INTO students (id, name, email, department, progress, created_at, updated_at)
-                VALUES (?, ?, ?, ?, 0, ?, ?)
-            ''', (student_id, name, email, department, now, now))
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (student_id, name, email, department, 0, now, now))
             
             self.conn.commit()
-            
-            # Initialize Onboarding Progress (Feature 10)
             self._init_student_progress(student_id)
-            
             return student_id
-            
-            self.conn.commit()
-            return student_id
-            
         except sqlite3.IntegrityError:
             cursor.execute("SELECT id FROM students WHERE email = ?", (email,))
-            existing_id = cursor.fetchone()[0]
-            return existing_id
-    
+            row = cursor.fetchone()
+            return row[0] if row else None
+
     def get_student(self, student_id: str) -> Optional[Dict]:
-        """Get student information"""
+        """Get student information with detailed progress"""
         cursor = self.conn.cursor()
         cursor.execute('''
-            SELECT id, name, email, department, progress, created_at, updated_at
-            FROM students WHERE id = ?
+            SELECT * FROM students WHERE id = ?
         ''', (student_id,))
         
         row = cursor.fetchone()
         if not row:
             return None
         
-        student = {
-            "id": row[0], "name": row[1], "email": row[2],
-            "department": row[3], "progress": row[4],
-            "created_at": row[5], "updated_at": row[6]
-        }
+        columns = [column[0] for column in cursor.description]
+        student = dict(zip(columns, row))
         
+        # Add onboarding steps
         cursor.execute('''
             SELECT s.title, p.status 
             FROM onboarding_steps s
@@ -384,7 +399,7 @@ class Database:
             ORDER BY s.id
         ''', (student_id,))
         
-        steps = cursor.fetchall()  # [(Title, Status), ...]
+        steps = cursor.fetchall()
         student["completed_steps"] = [s[0] for s in steps if s[1] == 'completed']
         student["pending_steps"] = [s[0] for s in steps if s[1] != 'completed']
         
@@ -398,6 +413,7 @@ class Database:
         data: Optional[Dict] = None
     ):
         """Update document upload status (Fix #3 Upsert behavior)"""
+        print(f"DEBUG: update_document_status called with student_id={student_id}, doc_type={doc_type}, status={status}")
         cursor = self.conn.cursor()
         cursor.execute("SELECT id FROM documents WHERE student_id = ? AND doc_type = ?", (student_id, doc_type))
         row = cursor.fetchone()
@@ -419,7 +435,7 @@ class Database:
             ''', (doc_id, student_id, doc_type, status, data_json, now))
         
         if status == "verified" or status == "validated":
-            self.mark_step_complete(student_id, "Upload Documents")
+            self.mark_step_complete_v2(student_id, "Upload Documents")
         
         self.conn.commit()
 
@@ -465,30 +481,58 @@ class Database:
             for r in rows
         ]
     
-    def mark_step_complete(self, student_id: str, step_name: str):
-        """Mark an onboarding step as complete"""
-        cursor = self.conn.cursor()
-        now = datetime.now().isoformat()
-        
-        cursor.execute('''
-            UPDATE onboarding_steps
-            SET completed = 1, completed_at = ?
-            WHERE student_id = ? AND step_name = ?
-        ''', (now, student_id, step_name))
-        
-        cursor.execute('SELECT COUNT(*) FROM onboarding_steps WHERE student_id = ?', (student_id,))
-        total_steps = cursor.fetchone()[0]
-        
-        cursor.execute('SELECT COUNT(*) FROM onboarding_steps WHERE student_id = ? AND completed = 1', (student_id,))
-        completed_steps = cursor.fetchone()[0]
-        
-        progress = int((completed_steps / total_steps) * 100) if total_steps > 0 else 0
-        
-        cursor.execute('''
-            UPDATE students SET progress = ?, updated_at = ? WHERE id = ?
-        ''', (progress, now, student_id))
-        
-        self.conn.commit()
+    def mark_step_complete_v2(self, student_id: str, step_name: str):
+        """Mark an onboarding step as complete (V2 Fix - Correct Schema)"""
+        try:
+            # Map legacy step names to new static step titles if needed
+            name_map = {
+                "Upload Documents": "Document Upload",
+                "Roommate Matching": "Hostel Allocation" # Approximate mapping
+            }
+            target_step = name_map.get(step_name, step_name)
+            
+            cursor = self.conn.cursor()
+            
+            # 1. Get Step ID
+            cursor.execute("SELECT id, xp_reward FROM onboarding_steps WHERE title = ?", (target_step,))
+            row = cursor.fetchone()
+            
+            if not row:
+                print(f"WARNING: Step '{step_name}' (mapped to '{target_step}') not found in onboarding_steps")
+                return
+            
+            step_id = row[0]
+            xp = row[1]
+            now = datetime.now().isoformat()
+            
+            # 2. Update Progress
+            cursor.execute('''
+                INSERT OR REPLACE INTO onboarding_progress (student_id, step_id, status, completed_at, xp_awarded)
+                VALUES (?, ?, 'completed', ?, ?)
+            ''', (student_id, step_id, now, xp))
+            
+            # 3. Recalculate Student Progress
+            cursor.execute('SELECT COUNT(*) FROM onboarding_steps')
+            total_steps = cursor.fetchone()[0]
+            
+            cursor.execute('''
+                SELECT COUNT(*) FROM onboarding_progress 
+                WHERE student_id = ? AND status = 'completed'
+            ''', (student_id,))
+            completed_steps = cursor.fetchone()[0]
+            
+            progress = int((completed_steps / total_steps) * 100) if total_steps > 0 else 0
+            
+            cursor.execute('''
+                UPDATE students SET progress = ?, updated_at = ? WHERE id = ?
+            ''', (progress, now, student_id))
+            
+            self.conn.commit()
+            
+        except Exception as e:
+            print(f"ERROR in mark_step_complete_v2: {e}")
+            # Do not raise, just log error so upload doesn't fail
+
     
     def get_all_students(self) -> List[Dict]:
         """Get all students (for admin dashboard)"""
@@ -504,6 +548,97 @@ class Database:
             {"id": r[0], "name": r[1], "email": r[2], "department": r[3], "progress": r[4]}
             for r in rows
         ]
+
+    def update_profile_photo(self, student_id: str, photo_url: str):
+        """Update student's uploaded profile photo URL"""
+        cursor = self.conn.cursor()
+        now = datetime.now().isoformat()
+        cursor.execute('''
+            UPDATE students 
+            SET profile_photo_url = ?, profile_picture_type = 'photo', updated_at = ? 
+            WHERE id = ?
+        ''', (photo_url, now, student_id))
+        self.conn.commit()
+
+    def get_student_profile(self, student_id: str) -> Optional[Dict]:
+        """Get summarized profile for display"""
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            SELECT name, email, department, profile_picture_type, profile_photo_url, avatar_style, avatar_background, bio, phone
+            FROM students WHERE id = ?
+        ''', (student_id,))
+        row = cursor.fetchone()
+        if not row: return None
+        
+        # Get counts for stats
+        cursor.execute("SELECT COUNT(*) FROM swipes WHERE student_id = ?", (student_id,))
+        swipes = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT COUNT(*) FROM mutual_matches WHERE student1_id = ? OR student2_id = ?", (student_id, student_id))
+        matches = cursor.fetchone()[0]
+
+        return {
+            "name": row[0], "email": row[1], "department": row[2],
+            "profile_type": row[3], "photo_url": row[4],
+            "avatar_style": row[5], "avatar_bg": row[6],
+            "bio": row[7], "phone": row[8],
+            "stats": {
+                "swipes": swipes,
+                "matches": matches,
+                "level": min(5, 1 + (swipes // 10)) # Simple level logic
+            }
+        }
+
+    def update_student_bio(self, student_id: str, bio: str):
+        """Update student tagline"""
+        now = datetime.now().isoformat()
+        self.conn.execute('''
+            UPDATE students SET bio = ?, updated_at = ? WHERE id = ?
+        ''', (bio, now, student_id))
+        self.conn.commit()
+
+    def get_id_card_status(self, student_id: str) -> dict:
+        """Check if student has generated their ID card"""
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "SELECT id_card_generated, id_card_generated_at, id_card_path, id_card_tagline FROM students WHERE id = ?",
+            (student_id,)
+        )
+        row = cursor.fetchone()
+        if not row:
+            return {"generated": False}
+        return {
+            "generated": bool(row[0]),
+            "generated_at": row[1],
+            "path": row[2],
+            "tagline": row[3] or "",
+        }
+
+    def mark_id_card_generated(self, student_id: str, path: str, tagline: str = ""):
+        """Permanently mark ID card as generated — cannot be undone"""
+        now = datetime.now().isoformat()
+        self.conn.execute(
+            "UPDATE students SET id_card_generated = 1, id_card_generated_at = ?, id_card_path = ?, id_card_tagline = ?, updated_at = ? WHERE id = ?",
+            (now, path, tagline, now, student_id)
+        )
+        self.conn.commit()
+
+
+    def update_student_phone(self, student_id: str, phone: str):
+        """Update student phone number"""
+        now = datetime.now().isoformat()
+        self.conn.execute('''
+            UPDATE students SET phone = ?, updated_at = ? WHERE id = ?
+        ''', (phone, now, student_id))
+        self.conn.commit()
+
+    def update_student_email(self, student_id: str, email: str):
+        """Update student email address"""
+        now = datetime.now().isoformat()
+        self.conn.execute('''
+            UPDATE students SET email = ?, updated_at = ? WHERE id = ?
+        ''', (email, now, student_id))
+        self.conn.commit()
 
     def save_roommate_preferences(self, student_id: str, preferences: Dict):
         """Save student's roommate preferences (Guide implementation)"""

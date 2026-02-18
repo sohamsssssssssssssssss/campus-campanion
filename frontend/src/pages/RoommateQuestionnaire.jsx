@@ -102,6 +102,13 @@ const QUESTIONNAIRE = [
             { value: "none", label: "None of these", emoji: "✅" }
         ],
         not_mandatory: true
+    },
+    {
+        id: "about_me",
+        question: "Tell us about yourself ✍️",
+        type: "text",
+        placeholder: "E.g. I'm a 2nd year CS student who loves hackathons, late-night chai, and binge-watching anime. Looking for a chill roommate who won't judge my 3 AM coding sessions 😄",
+        not_mandatory: true
     }
 ];
 
@@ -112,16 +119,15 @@ export default function RoommateQuestionnaire({ onComplete }) {
 
     const currentQ = QUESTIONNAIRE[step];
     const isMulti = currentQ.type === 'multi';
+    const isText = currentQ.type === 'text';
 
     const handleSelect = (value) => {
         if (isMulti) {
             let currentAnswers = answers[currentQ.id] || [];
 
             if (value === 'none') {
-                // If "None" is clicked, clear everything else and just set "none"
                 currentAnswers = isSelected('none') ? [] : ['none'];
             } else {
-                // If any other option is clicked, remove "none"
                 currentAnswers = currentAnswers.filter(v => v !== 'none');
                 if (currentAnswers.includes(value)) {
                     currentAnswers = currentAnswers.filter(v => v !== value);
@@ -131,6 +137,8 @@ export default function RoommateQuestionnaire({ onComplete }) {
             }
 
             setAnswers({ ...answers, [currentQ.id]: currentAnswers });
+        } else if (isText) {
+            setAnswers({ ...answers, [currentQ.id]: value });
         } else {
             setAnswers({ ...answers, [currentQ.id]: value });
             // Auto-next for single choice
@@ -206,33 +214,48 @@ export default function RoommateQuestionnaire({ onComplete }) {
                 >
                     <h2 className="text-xl font-bold mb-8">{currentQ.question}</h2>
 
-                    <div className="grid grid-cols-1 gap-3">
-                        {currentQ.options.map((opt) => {
-                            const selected = isSelected(opt.value);
-
-                            return (
-                                <button
-                                    key={opt.value}
-                                    onClick={() => handleSelect(opt.value)}
-                                    className={`flex items-center justify-between p-5 rounded-2xl border-2 transition-all duration-200 text-left ${selected
-                                        ? 'bg-accent/5 border-accent shadow-lg shadow-accent/5'
-                                        : 'bg-surface-card border-line hover:border-accent/40'
-                                        }`}
-                                >
-                                    <div className="flex items-center gap-4">
-                                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl ${selected ? 'bg-accent/10' : 'bg-surface'
-                                            }`}>
-                                            {opt.emoji}
+                    {isText ? (
+                        <div>
+                            <textarea
+                                value={answers[currentQ.id] || ''}
+                                onChange={(e) => handleSelect(e.target.value)}
+                                placeholder={currentQ.placeholder}
+                                maxLength={400}
+                                rows={5}
+                                className="w-full bg-surface-card border-2 border-line hover:border-accent/40 focus:border-accent rounded-2xl p-5 text-sm text-white placeholder-content-muted resize-none focus:outline-none transition-colors leading-relaxed"
+                            />
+                            <div className="flex justify-between mt-2 text-[11px] text-content-muted">
+                                <span>This will be shown to potential roommates</span>
+                                <span>{(answers[currentQ.id] || '').length}/400</span>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 gap-3">
+                            {currentQ.options.map((opt) => {
+                                const selected = isSelected(opt.value);
+                                return (
+                                    <button
+                                        key={opt.value}
+                                        onClick={() => handleSelect(opt.value)}
+                                        className={`flex items-center justify-between p-5 rounded-2xl border-2 transition-all duration-200 text-left ${selected
+                                            ? 'bg-accent/5 border-accent shadow-lg shadow-accent/5'
+                                            : 'bg-surface-card border-line hover:border-accent/40'
+                                            }`}
+                                    >
+                                        <div className="flex items-center gap-4">
+                                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl ${selected ? 'bg-accent/10' : 'bg-surface'}`}>
+                                                {opt.emoji}
+                                            </div>
+                                            <div>
+                                                <p className={`font-bold ${selected ? 'text-accent' : ''}`}>{opt.label}</p>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <p className={`font-bold ${selected ? 'text-accent' : ''}`}>{opt.label}</p>
-                                        </div>
-                                    </div>
-                                    {selected && <CheckCircle2 size={20} className="text-accent" />}
-                                </button>
-                            );
-                        })}
-                    </div>
+                                        {selected && <CheckCircle2 size={20} className="text-accent" />}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    )}
                 </motion.div>
             </AnimatePresence>
 
@@ -246,13 +269,13 @@ export default function RoommateQuestionnaire({ onComplete }) {
                     <ChevronLeft size={18} /> BACK
                 </button>
 
-                {(isMulti || step === QUESTIONNAIRE.length - 1) && (
+                {(isMulti || isText || step === QUESTIONNAIRE.length - 1) && (
                     <button
                         onClick={handleNext}
                         disabled={(isMulti && !currentQ.not_mandatory && (answers[currentQ.id] || []).length < 2) || submitting}
                         className="flex items-center gap-2 bg-accent hover:bg-accent-hover text-white px-8 py-3 rounded-xl font-bold text-sm shadow-xl shadow-accent/20 transition-all disabled:opacity-50"
                     >
-                        {step === QUESTIONNAIRE.length - 1 ? (submitting ? 'FINDING MATCHES...' : 'FINISH') : 'NEXT'} <ChevronRight size={18} />
+                        {step === QUESTIONNAIRE.length - 1 ? (submitting ? 'FINDING MATCHES...' : 'FINISH ✨') : 'NEXT'} <ChevronRight size={18} />
                     </button>
                 )}
             </div>

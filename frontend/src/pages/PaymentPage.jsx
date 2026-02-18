@@ -7,22 +7,29 @@ import {
 import { studentApi } from '../services/api';
 import axios from 'axios';
 import toast from 'react-hot-toast';
+import MockPaymentGateway from '../components/MockPaymentGateway';
+import { SHARED_FEES } from '../data/feeData';
 
 const API_URL = import.meta.env?.VITE_API_URL || 'http://localhost:8000/api';
 
 const PaymentPage = () => {
     const [loading, setLoading] = useState(false);
     const [paymentStatus, setPaymentStatus] = useState('pending'); // pending, success, failed
+    const [showMockGateway, setShowMockGateway] = useState(false);
+    const [mockOrderDetails, setMockOrderDetails] = useState(null);
     const studentId = 'demo_student'; // In real app, get from auth context
 
-    const feeBreakdown = [
-        { name: 'Tuition Fees', amount: 45000, description: 'Academic Year 2024-25' },
-        { name: 'Hostel Fees', amount: 15000, description: 'Semester 1 Accommodation' },
-        { name: 'Exam Fees', amount: 2500, description: 'Mid-term & External Exams' },
-        { name: 'Library Deposit', amount: 1000, description: 'Refundable Caution Money' },
-    ];
+    // Use shared fee data — same as parent portal
+    const feeBreakdown = SHARED_FEES.map(f => ({
+        name: f.type,
+        amount: f.amount,
+        description: f.description,
+        status: f.status,
+    }));
 
-    const totalAmount = feeBreakdown.reduce((acc, curr) => acc + curr.amount, 0);
+    // Only show pending fees in "Outstanding Dues"
+    const pendingFees = feeBreakdown.filter(f => f.status === 'pending');
+    const totalAmount = SHARED_FEES.reduce((acc, f) => acc + (f.amount - f.paid), 0);
 
     // Robust Razorpay Loader
     const loadRazorpay = () => {
@@ -41,36 +48,127 @@ const PaymentPage = () => {
 
         try {
             setLoading(true);
-            toast.loading('Processing payment...', { id: 'payment' });
-
-            // Simulate Network Delay (Mocking the gateway)
-            await new Promise(resolve => setTimeout(resolve, 2000));
-
-            // Direct Backend Call to Verify (Bypassing Razorpay Modal)
-            const verifyRes = await axios.post(`${API_URL}/payments/verify`, {
-                razorpay_order_id: `order_mock_${Date.now()}`,
-                razorpay_payment_id: `pay_mock_${Date.now()}`,
-                razorpay_signature: 'mock_signature',
-                student_id: student_id
-            });
-
-            if (verifyRes.data.success) {
-                toast.success('🎉 Payment successful!', { id: 'verify' });
-                setPaymentStatus('success');
-            } else {
-                throw new Error("Payment failed");
+            const isLoaded = await loadRazorpay();
+            if (!isLoaded) {
+                toast.error('Razorpay SDK failed to load. Are you online?');
+                return;
             }
 
+            // 1. Create Order in Backend
+            const orderRes = await axios.post(`${API_URL}/payments/create-order`, {
+                student_id: student_id,
+                amount: totalAmount * 100 // Convert to paise
+            });
+
+            if (!orderRes.data.success) {
+                throw new Error("Failed to create order");
+            }
+
+            const { order_id, amount, currency, key, demo } = orderRes.data;
+
+            if (demo) {
+                // Open Mock Gateway for realistic experience without real keys
+                setMockOrderDetails({ order_id, student_id });
+                setShowMockGateway(true);
+                setLoading(false);
+                return;
+            }
+
+            // 2. Open Razorpay Checkout Modal (Real Mode)
+            const options = {
+                key: key,
+                amount: amount,
+                currency: currency,
+                name: "CampusCompanion AI",
+                description: "Academic Fee Payment",
+                order_id: order_id,
+                handler: async function (response) {
+                    try {
+                        toast.loading('Verifying payment...', { id: 'verify' });
+                        // 3. Verify Payment in Backend
+                        const verifyRes = await axios.post(`${API_URL}/payments/verify`, {
+                            razorpay_order_id: response.razorpay_order_id,
+                            razorpay_payment_id: response.razorpay_payment_id,
+                            razorpay_signature: response.razorpay_signature,
+                            student_id: student_id
+                        });
+
+                        if (verifyRes.data.success) {
+                            toast.success('🎉 Payment successful!', { id: 'verify' });
+                            setPaymentStatus('success');
+                        } else {
+                            setPaymentStatus('failed');
+                            toast.error('Payment verification failed.', { id: 'verify' });
+                        }
+                    } catch (err) {
+                        console.error("Verification error:", err);
+                        setPaymentStatus('failed');
+                        toast.error('Something went wrong during verification.', { id: 'verify' });
+                    }
+                },
+                prefill: {
+                    name: "Demo Student",
+                    email: "student@example.com",
+                    contact: "9999999999"
+                },
+                theme: {
+                    color: "#4f46e5"
+                },
+                modal: {
+                    ondismiss: function () {
+                        setLoading(false);
+                    }
+                }
+            };
+
+            const rzp = new window.Razorpay(options);
+            rzp.open();
+
         } catch (error) {
-            toast.error('Payment failed', { id: 'payment' });
+            toast.error('Payment failed to initialize', { id: 'payment' });
             console.error(error);
         } finally {
             setLoading(false);
         }
     };
 
+    const handleMockSuccess = async () => {
+        if (!mockOrderDetails) return;
+
+        try {
+            toast.loading('Verifying payment...', { id: 'verify' });
+            setShowMockGateway(false);
+
+            const verifyRes = await axios.post(`${API_URL}/payments/verify`, {
+                razorpay_order_id: mockOrderDetails.order_id,
+                razorpay_payment_id: `pay_demo_${Date.now()}`,
+                razorpay_signature: 'demo_signature',
+                student_id: mockOrderDetails.student_id
+            });
+
+            if (verifyRes.data.success) {
+                toast.success('🎉 Payment successful!', { id: 'verify' });
+                setPaymentStatus('success');
+            }
+        } catch (err) {
+            toast.error('Demo verification failed');
+            setPaymentStatus('failed');
+        }
+    };
+
     return (
         <div className="min-h-screen bg-[#0f172a] text-slate-200 p-8 pt-24">
+            <AnimatePresence>
+                {showMockGateway && (
+                    <MockPaymentGateway
+                        isOpen={showMockGateway}
+                        onClose={() => { setShowMockGateway(false); setLoading(false); }}
+                        amount={totalAmount}
+                        onSuccess={handleMockSuccess}
+                    />
+                )}
+            </AnimatePresence>
+
             <div className="max-w-4xl mx-auto">
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
@@ -98,7 +196,7 @@ const PaymentPage = () => {
                             </h2>
 
                             <div className="space-y-4">
-                                {feeBreakdown.map((fee, idx) => (
+                                {pendingFees.map((fee, idx) => (
                                     <div key={idx} className="flex justify-between items-center p-4 rounded-xl bg-slate-900/50 border border-slate-800/50 hover:border-indigo-500/30 transition-colors group">
                                         <div>
                                             <p className="font-medium text-slate-200 group-hover:text-indigo-300 transition-colors">{fee.name}</p>

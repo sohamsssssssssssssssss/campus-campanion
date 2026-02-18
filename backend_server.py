@@ -11,6 +11,7 @@ from typing import Optional, List, Dict
 from pathlib import Path
 import uvicorn
 import os
+import requests
 import shutil
 import time
 import logging
@@ -20,6 +21,9 @@ import razorpay
 import hmac
 import hashlib
 import sqlite3
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+from reportlab.lib import colors
 
 from llm_agent import LocalLLMAgent
 from document_processor import DocumentProcessor
@@ -98,10 +102,6 @@ class ChatResponse(BaseModel):
     sources: Optional[List[str]] = []
     intent: Optional[str] = None
     latency: Optional[float] = None
-
-class PaymentRequest(BaseModel):
-    student_id: str
-    amount: int
     fallback: Optional[bool] = False
     admin_escalation: bool = False
 
@@ -151,6 +151,65 @@ class SwipeAction(BaseModel):
     student_id: str
     target_id: str
     action: str # "like" or "pass"
+
+def generate_pdf_receipt(payment_data):
+    """Generate a PDF receipt for a payment"""
+    try:
+        receipt_dir = Path("uploads/receipts")
+        receipt_dir.mkdir(parents=True, exist_ok=True)
+        
+        file_name = f"receipt_{payment_data['id']}.pdf"
+        file_path = receipt_dir / file_name
+        
+        c = canvas.Canvas(str(file_path), pagesize=letter)
+        width, height = letter
+        
+        # Header
+        c.setFont("Helvetica-Bold", 24)
+        c.setFillColor(colors.darkblue)
+        c.drawString(50, height - 50, "CampusCompanion")
+        
+        c.setFont("Helvetica", 14)
+        c.setFillColor(colors.black)
+        c.drawString(50, height - 80, "Official Payment Receipt")
+        
+        # Line
+        c.setStrokeColor(colors.gray)
+        c.line(50, height - 90, width - 50, height - 90)
+        
+        # Details
+        y = height - 130
+        c.setFont("Helvetica", 12)
+        
+        details = [
+            f"Receipt ID: {payment_data['id']}",
+            f"Date: {payment_data['paid_at']}",
+            f"Student ID: {payment_data['student_id']}",
+            f"Transaction Ref: {payment_data['razorpay_payment_id']}",
+            f"Payment Method: Online (Razorpay)",
+            f"Status: {payment_data['status'].upper()}"
+        ]
+        
+        for line in details:
+            c.drawString(50, y, line)
+            y -= 25
+            
+        # Amount Box
+        c.rect(50, y - 40, 200, 30, fill=0)
+        c.setFont("Helvetica-Bold", 14)
+        c.drawString(60, y - 30, f"Amount Paid: INR {payment_data['amount'] / 100:.2f}")
+        
+        # Footer
+        c.setFont("Helvetica-Oblique", 10)
+        c.setFillColor(colors.gray)
+        c.drawString(50, 50, "This is a computer generated receipt and does not join signature.")
+        c.drawString(50, 35, f"Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        
+        c.save()
+        return f"/uploads/receipts/{file_name}"
+    except Exception as e:
+        logger.error(f"❌ PDF Gen Error: {e}")
+        return None
 
 # ==================== ROUTES ====================
 
@@ -204,10 +263,135 @@ async def verify_email_update(request: EmailVerifyRequest):
     else:
         raise HTTPException(status_code=400, detail="Invalid verification code")
 
+
 @app.put("/api/profile/{student_id}/phone")
 async def update_phone(student_id: str, phone_data: PhoneUpdateRequest):
     db.update_student_phone(student_id, phone_data.phone)
     return {"success": True}
+
+@app.get("/api/student/id-card/{student_id}")
+async def get_id_card(student_id: str):
+    """Check if student has generated their ID card and return card data"""
+    status = db.get_id_card_status(student_id)
+    if not status["generated"]:
+        return {"generated": False}
+
+    profile = db.get_student_profile(student_id)
+    name = profile.get("name", "Student") if profile else "Student"
+    dept = profile.get("department", "Engineering") if profile else "Engineering"
+    photo_url = profile.get("profile_photo_url") if profile else None
+
+    return {
+        "generated": True,
+        "generated_at": status.get("generated_at"),
+        "card_data": {
+            "name": name,
+            "department": dept,
+            "photo_url": photo_url,
+            "roll_no": f"TCET/{dept[:2].upper()}/2024/042",
+            "prn": "2024016400123456",
+            "blood_group": "B+",
+            "valid_until": "June 2028",
+            "year": "2024–28",
+        }
+    }
+
+@app.post("/api/student/generate-id-card")
+async def generate_id_card(request: dict):
+    """Generate a permanent ID card for the student — can only be done ONCE"""
+    import qrcode
+    import io
+    import base64
+    import os
+
+    student_id = request.get("student_id", "demo_student")
+
+    # --- Guard: already generated ---
+    status = db.get_id_card_status(student_id)
+    if status["generated"]:
+        raise HTTPException(status_code=403, detail="ID card already generated. It cannot be regenerated.")
+
+    profile = db.get_student_profile(student_id)
+    name = profile.get("name", "Student") if profile else "Student"
+    dept = profile.get("department", "Engineering") if profile else "Engineering"
+    photo_url = profile.get("profile_photo_url") if profile else None
+
+    roll_no = f"TCET/{dept[:2].upper()}/2024/042"
+    prn = "2024016400123456"
+    from datetime import date
+    generated_at = date.today().isoformat()
+
+    # --- AI-generated personalised tagline via Llama ---
+    ai_tagline = ""
+    try:
+        # Pull roommate survey bio if available
+        roommate_prefs = db.get_roommate_preferences(student_id) or {}
+        about_me = roommate_prefs.get("about_me", "")
+        bio = profile.get("bio", "") if profile else ""
+
+        prompt_context = f"Name: {name}\nDepartment: {dept}\nBio: {bio}\nAbout: {about_me}"
+        llama_prompt = (
+            f"You are writing a short, punchy one-line tagline for a college student's official ID card. "
+            f"Based on the following profile, write ONLY a single sentence (max 12 words) that captures their personality or ambition. "
+            f"No quotes, no explanation, just the tagline.\n\n{prompt_context}"
+        )
+
+        import httpx
+        llama_resp = httpx.post(
+            "http://localhost:11434/api/generate",
+            json={"model": "llama3.2", "prompt": llama_prompt, "stream": False},
+            timeout=15.0,
+        )
+        if llama_resp.status_code == 200:
+            raw = llama_resp.json().get("response", "").strip()
+            # Keep only the first sentence, strip quotes
+            ai_tagline = raw.split("\n")[0].strip('"\' ').rstrip('.')
+    except Exception:
+        # Ollama unavailable — silently fall back to empty tagline
+        ai_tagline = ""
+
+    qr_data = {
+        "name": name,
+        "roll": roll_no,
+        "branch": dept,
+        "year": "2024-28",
+        "college": "TCET Mumbai",
+        "tagline": ai_tagline,
+        "verified": True,
+        "generated_at": generated_at,
+    }
+    import json as _json
+    qr = qrcode.QRCode(version=1, box_size=6, border=2)
+    qr.add_data(_json.dumps(qr_data))
+    qr.make(fit=True)
+    qr_img = qr.make_image(fill_color="#0d9488", back_color="white")
+
+    buf = io.BytesIO()
+    qr_img.save(buf, format="PNG")
+    qr_b64 = base64.b64encode(buf.getvalue()).decode()
+
+    # --- Save a placeholder path and mark as generated ---
+    os.makedirs("static/id_cards", exist_ok=True)
+    card_path = f"static/id_cards/{student_id}.png"
+    db.mark_id_card_generated(student_id, card_path)
+
+    return {
+        "success": True,
+        "generated_at": generated_at,
+        "card_data": {
+            "name": name,
+            "department": dept,
+            "photo_url": photo_url,
+            "roll_no": roll_no,
+            "prn": prn,
+            "blood_group": "B+",
+            "valid_until": "June 2028",
+            "year": "2024–28",
+            "qr_base64": qr_b64,
+            "ai_tagline": ai_tagline,
+        }
+    }
+
 
 @app.get("/")
 async def root():
@@ -346,13 +530,12 @@ async def check_demo_ready():
 @app.post("/api/documents/upload")
 async def upload_document(
     file: UploadFile = File(...),
-    doc_type: str = "id_card",
-    student_id: str = "demo_student"
+    doc_type: str = Form("id_card"),
+    student_id: str = Form("demo_student")
 ):
     """
     Handle document upload with quality check, OCR, and AI validation.
     """
-    print("!!! NEW CODE LOADED - UPLOAD ENDPOINT HIT !!!")
     # 1. Start timer
     start = datetime.now()
 
@@ -463,13 +646,6 @@ async def create_student(student: StudentCreate):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-@app.get("/api/admin/all-students")
-async def get_all_students():
-    """List all registered students (Admin only)"""
-    try:
-        return {"success": True, "students": db.get_all_students()}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/student/{student_id}/progress", response_model=ProgressResponse)
 async def get_progress(student_id: str):
@@ -522,12 +698,33 @@ async def save_roommate_preferences_guide(request: dict, student_id: str = "demo
 
 @app.get("/api/roommates/matches/{student_id}")
 async def get_roommate_matches_guide(student_id: str):
-    """Get AI-matched roommates based on preferences (Guide)"""
+    """Get AI-matched roommates based on preferences, with Llama-generated insights"""
     try:
         all_students = db.get_all_students_with_preferences()
-        
+
         if not all_students:
-            # Fallback: return mock data if no one has filled preferences yet
+            # Fallback mock data — also enriched with Llama if available
+            mock_prefs = {
+                "sleep_schedule": "Night Owl",
+                "cleanliness": "moderate",
+                "study_time": "night",
+                "noise_tolerance": "medium",
+                "interests": ["Coding", "Sports"],
+                "department": "Computer Engineering",
+                "social_energy": "ambivert",
+                "temperature": "ac_cold",
+                "guest_frequency": "sometimes",
+                "lifestyle": ["None of these"],
+                "morning_routine": "flexible",
+            }
+            ai_summary = _generate_llama_summary(
+                student_name="You",
+                match_name="Rahul Verma",
+                score=87,
+                strengths=["Both prefer late study hours", "Similar cleanliness standards"],
+                challenges=["Different music preferences"],
+                shared_interests=["Coding", "Sports"],
+            )
             return {
                 "success": True,
                 "student_id": student_id,
@@ -543,24 +740,90 @@ async def get_roommate_matches_guide(student_id: str):
                         "strengths": ["Both prefer late study hours", "Similar cleanliness standards"],
                         "challenges": ["Different music preferences"],
                         "tips": ["Create shared playlist for common areas"],
+                        "ai_summary": ai_summary,
                         "photo": "https://api.dicebear.com/7.x/avataaars/svg?seed=rahul"
                     }
                 ],
                 "note": "Demo mode — be the first to fill preferences!"
             }
-        
-        matches = find_matches(student_id, all_students, top_n=10)
-        
+
+        raw_matches = find_matches(student_id, all_students, top_n=10)
+
+        # Get current student's name for the prompt
+        current = next((s for s in all_students if s["id"] == student_id), {})
+        current_name = current.get("name", "You")
+
+        # Enrich each match with a Llama-generated summary
+        for m in raw_matches:
+            m["ai_summary"] = _generate_llama_summary(
+                student_name=current_name,
+                match_name=m["name"],
+                score=m["compatibility"],
+                strengths=m.get("strengths", []),
+                challenges=m.get("challenges", []),
+                shared_interests=m.get("shared_interests", []),
+            )
+
         return {
             "success": True,
             "student_id": student_id,
-            "matches": matches,
-            "algorithm": "15-factor heuristic compatibility analysis",
-            "note": f"Found {len(matches)} compatible roommates"
+            "matches": raw_matches,
+            "algorithm": "15-factor heuristic + Llama AI insights",
+            "note": f"Found {len(raw_matches)} compatible roommates"
         }
     except Exception as e:
         logger.error(f"❌ Match Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+def _generate_llama_summary(
+    student_name: str,
+    match_name: str,
+    score: float,
+    strengths: list,
+    challenges: list,
+    shared_interests: list,
+) -> str:
+    """Call local Llama (Ollama) to generate a friendly compatibility summary. Falls back gracefully."""
+    strengths_text = "; ".join(strengths) if strengths else "some compatible habits"
+    challenges_text = "; ".join(challenges) if challenges else "minor differences"
+    interests_text = ", ".join(shared_interests) if shared_interests else "various topics"
+
+    prompt = f"""You are a friendly college roommate matching assistant.
+Write a short, warm, 2-sentence summary explaining why {student_name} and {match_name} would make good roommates.
+Compatibility score: {score}%.
+Strengths: {strengths_text}.
+Potential challenges: {challenges_text}.
+Shared interests: {interests_text}.
+Keep it casual, encouraging, and specific. Return ONLY the 2 sentences — no bullet points, no preamble."""
+
+    try:
+        import requests as req
+        resp = req.post(
+            "http://localhost:11434/api/generate",
+            json={"model": "gemma3:4b", "prompt": prompt, "stream": False, "options": {"temperature": 0.75, "num_predict": 80}},
+            timeout=12,
+        )
+        if resp.status_code == 200:
+            text = resp.json().get("response", "").strip()
+            if text:
+                return text
+    except Exception:
+        pass
+
+    # Graceful fallback — still sounds natural
+    if score >= 80:
+        tone = "an excellent"
+    elif score >= 65:
+        tone = "a great"
+    else:
+        tone = "a decent"
+    return (
+        f"{match_name} looks like {tone} match for you with a {score}% compatibility score! "
+        f"You both share {interests_text} and have {strengths_text.lower()}."
+    )
+
+
 
 @app.post("/api/roommate/swipe")
 async def swipe_roommate(data: SwipeAction):
@@ -619,14 +882,70 @@ async def update_progress(student_id: str, step: str):
 async def get_lectures(request: dict):
     subject = request.get("subject", "Programming")
     topic = request.get("topic", "basics")
-    return {
-        "success": True,
-        "lectures": [
-            {"title": f"{topic} - Full Course", "channel": "MIT OpenCourseWare", "thumbnail": f"https://img.youtube.com/vi/dQw4w9WgXcQ/hqdefault.jpg", "url": f"https://youtube.com/results?search_query={subject}+{topic}"},
-            {"title": f"Learn {topic} in 1 Hour", "channel": "freeCodeCamp", "thumbnail": f"https://img.youtube.com/vi/dQw4w9WgXcQ/hqdefault.jpg", "url": f"https://youtube.com/results?search_query={topic}+tutorial"},
-            {"title": f"{subject} - {topic} Explained", "channel": "CS Dojo", "thumbnail": f"https://img.youtube.com/vi/dQw4w9WgXcQ/hqdefault.jpg", "url": f"https://youtube.com/results?search_query={topic}+explained"},
-        ]
+    prefer_nptel = request.get("nptel", False)
+    
+    api_key = os.getenv("YOUTUBE_API_KEY")
+    if not api_key:
+        # Fallback to smart mock data if no API key
+        return {
+            "success": True,
+            "lectures": [
+                {"title": f"{topic} - TCET Engineering Lecture", "channel": "TCET Mumbai", "thumbnail": "https://img.youtube.com/vi/dQw4w9WgXcQ/hqdefault.jpg", "url": f"https://youtube.com/results?search_query={subject}+{topic}", "duration": "45:00", "views": "1.2K"},
+                {"title": f"NPTEL: {topic} and {subject}", "channel": "NPTEL-NOC IITM", "thumbnail": "https://img.youtube.com/vi/dQw4w9WgXcQ/hqdefault.jpg", "url": f"https://youtube.com/results?search_query=NPTEL+{topic}", "duration": "52:10", "views": "45K"},
+            ],
+            "note": "Running in Demo Mode (Add YOUTUBE_API_KEY to .env for real search)"
+        }
+
+    # Smart Search Queries
+    query_templates = {
+        "Mathematics": "{topic} mathematics engineering | Abdul Kalam | NPTEL",
+        "Data Structures": "{topic} data structures | Neso Academy | Jenny's Lectures",
+        "Computer Networks": "{topic} computer networks | Gate Smashers | Neso Academy",
+        "Machine Learning": "{topic} machine learning | Sentdex | Andrew Ng | Krish Naik",
+        "Operating Systems": "{topic} operating system | Neso Academy | Gate Smashers"
     }
+    
+    base_query = query_templates.get(subject, "{topic} {subject} engineering college lecture India")
+    search_query = base_query.format(topic=topic, subject=subject)
+    
+    if prefer_nptel:
+        search_query += " NPTEL"
+
+    try:
+        url = "https://www.googleapis.com/youtube/v3/search"
+        params = {
+            "part": "snippet",
+            "q": search_query,
+            "key": api_key,
+            "maxResults": 8,
+            "type": "video",
+            "relevanceLanguage": "en"
+        }
+        
+        response = requests.get(url, params=params)
+        data = response.json()
+        
+        if "error" in data:
+            logger.error(f"YouTube API Error: {data['error']}")
+            raise Exception(data["error"]["message"])
+
+        lectures = []
+        for item in data.get("items", []):
+            video_id = item["id"]["videoId"]
+            snippet = item["snippet"]
+            lectures.append({
+                "title": snippet["title"],
+                "channel": snippet["channelTitle"],
+                "thumbnail": snippet["thumbnails"]["high"]["url"],
+                "url": f"https://www.youtube.com/watch?v={video_id}",
+                "duration": "Duration N/A", # Search endpoint doesn't give duration directly without another call
+                "views": "Recent"
+            })
+            
+        return {"success": True, "lectures": lectures}
+    except Exception as e:
+        logger.error(f"❌ YouTube Search Error: {e}")
+        return {"success": False, "error": str(e), "lectures": []}
 
 @app.post("/api/acad/quiz")
 async def generate_quiz(request: dict):
@@ -644,6 +963,77 @@ async def get_study_groups(subject: str = "General", topic: str = ""):
             {"name": "Debug Masters", "topic": f"{topic or subject} Practice", "members": 8, "next_session": "Sunday 5PM", "type": "Library"},
             {"name": "TCET Coders", "topic": "General Engineering Help", "members": 24, "next_session": "Daily 9PM", "type": "WhatsApp"},
         ]
+    }
+
+# --- Calendar & Timetable Endpoints ---
+
+@app.get("/api/calendar/timetable")
+async def get_timetable():
+    """Get weekly class timetable (Digitized from Image)"""
+    # Helper to create event object
+    def event(day, start, end, title, type="Lecture", room="LH-2"):
+        return {
+            "id": str(uuid.uuid4()),
+            "day": day,
+            "startTime": start,
+            "endTime": end,
+            "title": title,
+            "type": type.lower(),
+            "room": room,
+            "color": "blue" if type == "Lecture" else "green" if type == "Lab" else "orange"
+        }
+
+    timetable = [
+        # Monday
+        event("Monday", "08:45", "09:45", "AMT-II (YM)", "Lecture", "LH-2"),
+        event("Monday", "09:45", "10:45", "CT (BC)", "Lecture", "LH-2"),
+        event("Monday", "11:00", "12:00", "PYTHON-C1 (SPA LAB) (MP)", "Lab", "WS-C2"),
+        event("Monday", "11:00", "12:00", "DE-C3 (VK)", "Lecture", "LH-2"),
+        event("Monday", "13:30", "14:30", "SPC (TD)", "Lecture", "LH-1"),
+        event("Monday", "14:30", "15:30", "PYTHON (SPA LAB) (MP) C2", "Lab", "WS-C3"),
+        
+        # Tuesday
+        event("Tuesday", "08:45", "10:45", "EG (AUTOCAD) (VD/PS)", "Lab", "CAD Lab"),
+        event("Tuesday", "11:00", "12:00", "EG (AUTOCAD) (VD/PS)", "Lab", "CAD Lab"),
+        event("Tuesday", "13:30", "14:30", "AMT-II-C2 (ZA)", "Tutorial", "LH-1"),
+        event("Tuesday", "13:30", "14:30", "CT-C3 (KJ)", "Tutorial", "LH-2"),
+        event("Tuesday", "13:30", "14:30", "SPC-C1 (SG) (LL)", "Tutorial", "LH-2"),
+        event("Tuesday", "15:30", "16:30", "DE (Remedial)", "Lecture", "LH-1"),
+
+        # Wednesday
+        event("Wednesday", "08:45", "09:45", "PYTHON (MP)", "Lecture", "LH-2"),
+        event("Wednesday", "09:45", "10:45", "PYTHON (MP)", "Lecture", "LH-2"),
+        event("Wednesday", "11:00", "12:00", "PYTHON (SPA LAB)-C3 (MP)", "Lab", "WS-C1"),
+        event("Wednesday", "11:00", "12:00", "DE-C2 (AP)", "Lecture", "LH-2"),
+        event("Wednesday", "13:30", "14:30", "AMT-II (YM)", "Lecture", "LH-2"),
+        event("Wednesday", "14:30", "15:30", "DE (AP)", "Lecture", "LH-2"),
+        event("Wednesday", "15:30", "16:30", "CO (Remedial)", "Lecture", "LH-2"),
+
+        # Thursday
+        event("Thursday", "08:45", "10:45", "AMT-II-C1(YM)", "Tutorial", "LH-1"),
+        event("Thursday", "08:45", "10:45", "CT-C2(GA)", "Tutorial", "LH-2"),
+        event("Thursday", "08:45", "10:45", "SPC-C3(SG)", "Tutorial", "LL"),
+        event("Thursday", "11:00", "12:00", "CO (SLD)", "Lecture", "LH-2"),
+        event("Thursday", "12:00", "13:00", "CT (BC)", "Lecture", "LH-2"),
+        event("Thursday", "13:30", "14:30", "AMT-II-C3 (ZA)", "Tutorial", "LH-1"),
+        event("Thursday", "13:30", "14:30", "CT-C1 (GA)", "Tutorial", "LH-2"),
+        event("Thursday", "13:30", "14:30", "SPC-C2 (TD)", "Tutorial", "LL"),
+        event("Thursday", "15:30", "16:30", "AMT-II (Remedial)", "Lecture", "LH-1"),
+
+        # Friday
+        event("Friday", "08:45", "09:45", "CT (BC)", "Lecture", "LH-2"),
+        event("Friday", "09:45", "10:45", "DE (AP)", "Lecture", "LH-2"),
+        event("Friday", "11:00", "12:00", "AMT-II (YM)", "Lecture", "LH-2"),
+        event("Friday", "12:00", "13:00", "DE (AP)", "Lecture", "LH-2"),
+        event("Friday", "13:30", "14:30", "SPC (TD)", "Lecture", "LH-2"),
+        event("Friday", "14:30", "15:30", "CO (SLD)", "Lecture", "LH-2"),
+        event("Friday", "15:30", "16:30", "CT (Remedial)", "Lecture", "LH-2"),
+    ]
+    
+    return {
+        "success": True,
+        "week": "Current",
+        "timetable": timetable
     }
 
 # --- Safety & Emergency Endpoints ---
@@ -744,53 +1134,40 @@ except Exception:
     razorpay_client = None
 
 @app.post("/api/payments/create-order")
-async def create_payment_order(data: PaymentRequest):
-    """Create Razorpay order for fee payment (Demo Mode)"""
+async def create_payment_order(request: dict):
+    """Create a Razorpay order (with Demo Mode fallback)"""
     try:
-        student_id = data.student_id
-        amount = data.amount
+        student_id = request.get("student_id", "demo_student")
+        amount = request.get("amount", 6350000)
         
-        # Create order receipt
-        receipt = f"receipt_{student_id}_{datetime.now().timestamp()}"
+        is_demo = RAZORPAY_KEY_ID == "rzp_test_campus123" or not RAZORPAY_KEY_ID.startswith("rzp_")
         
-        # Mock order object
-        order_id = f"order_{int(datetime.now().timestamp())}"
+        if is_demo:
+            logger.info("ℹ️ Using Demo Mode for Payment Order")
+            order = {
+                "id": f"order_demo_{int(time.time())}",
+                "amount": amount,
+                "currency": "INR",
+                "status": "created"
+            }
+        else:
+            try:
+                receipt = f"rcpt_{student_id}_{int(time.time())}"
+                order = razorpay_instance.create_order(amount=amount, receipt=receipt)
+            except Exception as e:
+                logger.warning(f"⚠️ Razorpay API failed, falling back to Demo Mode: {e}")
+                is_demo = True
+                order = {
+                    "id": f"order_demo_fallback_{int(time.time())}",
+                    "amount": amount,
+                    "currency": "INR",
+                    "status": "created"
+                }
         
         # Save pending transaction to DB
         payment_id = str(uuid.uuid4())
-        db.save_payment(payment_id, student_id, amount, order_id)
-        
-        return {
-            "success": True,
-            "order_id": order_id,
-            "amount": amount,
-            "currency": "INR",
-            "key": RAZORPAY_KEY_ID,
-            "demo": True # Force demo mode for this prototype
-        }
-    except Exception as e:
-        logger.error(f"❌ Payment Order Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/api/payments/verify")
-async def verify_payment(
-    request: dict
-):
-    """Verify Razorpay payment signature (Mocked for Demo)"""
-    try:
-        razorpay_order_id = request.get("razorpay_order_id")
-        razorpay_payment_id = request.get("razorpay_payment_id")
-        razorpay_signature = request.get("razorpay_signature")
-        student_id = request.get("student_id", "demo_student")
-        
-        # For demo: accept all payments
-        payment_id = str(uuid.uuid4())
-        now = datetime.now().isoformat()
-        
-        # Direct database interaction to ensure table exists and record saved
         conn = sqlite3.connect("campuscompanion.db")
         cursor = conn.cursor()
-        
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS payments (
                 id TEXT PRIMARY KEY,
@@ -802,64 +1179,91 @@ async def verify_payment(
                 paid_at TEXT
             )
         ''')
-        
         cursor.execute('''
-            INSERT INTO payments (id, student_id, amount, razorpay_order_id, razorpay_payment_id, status, paid_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (payment_id, student_id, 6350000, razorpay_order_id, razorpay_payment_id, "success", now))
-        
+            INSERT INTO payments (id, student_id, amount, razorpay_order_id, status)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (payment_id, student_id, amount, order["id"], "pending"))
         conn.commit()
         conn.close()
         
-        # Mark "Fee Payment" step complete
-        db.mark_step_complete(student_id, "Fee Payment")
+        return {
+            "success": True,
+            "order_id": order["id"],
+            "amount": amount,
+            "currency": "INR",
+            "key": RAZORPAY_KEY_ID,
+            "demo": is_demo
+        }
+    except Exception as e:
+        logger.error(f"❌ Payment Order Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/payments/verify")
+async def verify_payment(request: dict):
+    """Verify payment (Accepts demo orders automatically)"""
+    try:
+        order_id = request.get("razorpay_order_id")
+        payment_id = request.get("razorpay_payment_id")
+        signature = request.get("razorpay_signature")
+        student_id = request.get("student_id", "demo_student")
+        
+        is_demo_order = order_id.startswith("order_demo")
+        
+        if not is_demo_order:
+            # Real Verification
+            is_valid = razorpay_instance.verify_payment_signature(order_id, payment_id, signature)
+            if not is_valid:
+                raise HTTPException(status_code=400, detail="Invalid payment signature")
+        
+        # Update Database
+        now = datetime.now().isoformat()
+        conn = sqlite3.connect("campuscompanion.db")
+        cursor = conn.cursor()
+        cursor.execute('''
+            UPDATE payments 
+            SET razorpay_payment_id = ?, status = ?, paid_at = ?
+            WHERE razorpay_order_id = ?
+        ''', (payment_id, "success", now, order_id))
+        conn.commit()
+        conn.close()
+        
+        # Update progress
+        db.mark_step_complete_v2(student_id, "Fee Payment")
         
         return {
             "success": True,
-            "payment_id": payment_id,
             "status": "success",
-            "message": "✅ Payment successful! Your fees have been recorded.",
-            "receipt_url": f"/api/payments/receipt/{payment_id}"
+            "message": "✅ Payment verified! Your fees have been recorded.",
+            "payment_id": payment_id,
+            "demo": is_demo_order
         }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"❌ Payment Verification Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/payments/{student_id}/history")
 async def get_payment_history(student_id: str):
-    """Get payment history for student"""
+    """Get real payment history from database"""
     try:
         conn = sqlite3.connect("campuscompanion.db")
+        conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-        
         cursor.execute('''
-            SELECT id, amount, razorpay_payment_id, status, paid_at
-            FROM payments
-            WHERE student_id = ?
+            SELECT * FROM payments 
+            WHERE student_id = ? 
             ORDER BY paid_at DESC
         ''', (student_id,))
-        
-        payments = []
-        for row in cursor.fetchall():
-            payments.append({
-                "id": row[0],
-                "amount": row[1],
-                "payment_id": row[2],
-                "status": row[3],
-                "paid_at": row[4]
-            })
-        
+        rows = cursor.fetchall()
         conn.close()
         
         return {
-            "success": True,
-            "payments": payments
+            "success": True, 
+            "payments": [dict(r) for r in rows]
         }
     except Exception as e:
         logger.error(f"❌ Payment History Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-    except Exception as e:
-        logger.error(f"❌ Payment Verification Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # --- Integration Routes ---
@@ -931,7 +1335,7 @@ if __name__ == "__main__":
     print("")
     
     uvicorn.run(
-        "main:app",
+        "backend_server:app",
         host="0.0.0.0",
         port=8000,
         reload=True

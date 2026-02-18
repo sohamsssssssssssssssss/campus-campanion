@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Send, Loader2, Bot, User, ThumbsUp, ThumbsDown, Trash2, Globe, ChevronDown } from 'lucide-react';
 import { studentApi } from '../services/api';
+import ProfileAvatar from '../components/ProfileAvatar';
+import { Link } from 'react-router-dom';
 
 const LANGUAGES = [
     { code: 'en', label: 'English' },
@@ -29,7 +31,7 @@ export default function ChatPage() {
         {
             id: 'welcome',
             role: 'ai',
-            text: "Hi! 👋 I'm your CampusCompanion — powered by local AI. I can help with documents, fees, courses, hostel, and more. What would you like to know?",
+            text: "Hi! 👋 I'm your CampusCompanion. I can help with documents, fees, courses, hostel, and more. What would you like to know?",
             timestamp: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
         },
     ]);
@@ -164,6 +166,10 @@ export default function ChatPage() {
                             </div>
                         )}
                     </div>
+                    {/* Profile Link */}
+                    <Link to="/profile" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+                        <ProfileAvatar studentId="demo_student" size="xs" />
+                    </Link>
                     {/* Clear chat */}
                     <button
                         onClick={clearChat}
@@ -244,8 +250,8 @@ export default function ChatPage() {
                                 )}
                             </div>
                             {msg.role === 'user' && (
-                                <div className="w-8 h-8 rounded-lg bg-accent/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                                    <User size={16} className="text-accent" />
+                                <div className="flex-shrink-0 mt-0.5">
+                                    <ProfileAvatar studentId="demo_student" size="xs" />
                                 </div>
                             )}
                         </motion.div>

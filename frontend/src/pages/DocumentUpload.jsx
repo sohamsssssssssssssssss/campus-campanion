@@ -210,7 +210,7 @@ export default function DocumentUpload() {
                                         <Upload className="text-accent" />
                                     </div>
                                     <span className="text-sm font-medium">Browse</span>
-                                    <input type="file" className="hidden" onChange={(e) => handleFileUpload(e, selectedDoc.id)} />
+                                    <input type="file" accept=".jpg,.jpeg,.png,.pdf" className="hidden" onChange={(e) => handleFileUpload(e, selectedDoc.id)} />
                                 </label>
                             </div>
 

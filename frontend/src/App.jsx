@@ -13,6 +13,8 @@ const SafetyPage = lazy(() => import('./pages/SafetyPage'));
 const AcademAI = lazy(() => import('./pages/AcademAI'));
 const PaymentPage = lazy(() => import('./pages/PaymentPage'));
 const OnboardingPage = lazy(() => import('./pages/OnboardingPage'));
+const ProfilePage = lazy(() => import('./pages/ProfilePage'));
+const CalendarPage = lazy(() => import('./pages/CalendarPage'));
 
 // Parent Portal Components
 const ParentLogin = lazy(() => import('./pages/parent/ParentLogin'));
@@ -23,7 +25,8 @@ const ParentFees = lazy(() => import('./pages/parent/ParentFees'));
 const ParentAcademics = lazy(() => import('./pages/parent/ParentAcademics'));
 const ParentLocation = lazy(() => import('./pages/parent/ParentLocation'));
 const ParentAlerts = lazy(() => import('./pages/parent/ParentAlerts'));
-const ParentMentor = lazy(() => import('./pages/parent/ParentMentor'));
+const MentorPage = lazy(() => import('./pages/MentorPage'));
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
 
 function Loading() {
   return (
@@ -36,13 +39,14 @@ function Loading() {
 function AppContent() {
   const location = useLocation();
   const isLanding = location.pathname === '/';
+  const isLoginPage = location.pathname === '/login';
   const isParentPortal = location.pathname.startsWith('/parent');
 
   return (
     <div className={`min-h-screen ${isParentPortal ? 'bg-[#0f172a]' : 'bg-surface text-content'}`}>
-      {!isLanding && !isParentPortal && <Sidebar />}
+      {!isLanding && !isLoginPage && !isParentPortal && <Sidebar />}
 
-      <main className={!isLanding && !isParentPortal ? 'sidebar-offset pt-14 lg:pt-0' : ''}>
+      <main className={!isLanding && !isLoginPage && !isParentPortal ? 'sidebar-offset pt-14 lg:pt-0' : ''}>
         <Suspense fallback={<Loading />}>
           <Routes>
             {/* Student/Main Routes */}
@@ -53,9 +57,13 @@ function AppContent() {
             <Route path="/chat" element={<ChatPage />} />
             <Route path="/documents" element={<DocumentUpload />} />
             <Route path="/roommates" element={<RoommateMatcher />} />
+            <Route path="/mentors" element={<MentorPage />} />
             <Route path="/safety" element={<SafetyPage />} />
             <Route path="/acad" element={<AcademAI />} />
             <Route path="/payment" element={<PaymentPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/timetable" element={<CalendarPage />} />
+            <Route path="/admin" element={<AdminDashboard />} />
 
             {/* Parent Portal Routes */}
             <Route path="/parent-login" element={<ParentLogin />} />
@@ -66,7 +74,7 @@ function AppContent() {
               <Route path="academics" element={<ParentAcademics />} />
               <Route path="location" element={<ParentLocation />} />
               <Route path="alerts" element={<ParentAlerts />} />
-              <Route path="mentor" element={<ParentMentor />} />
+              {/* <Route path="mentor" element={<ParentMentor />} /> */}
             </Route>
           </Routes>
         </Suspense>

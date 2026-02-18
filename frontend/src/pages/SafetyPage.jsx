@@ -18,7 +18,10 @@ import {
     X,
     Sparkles,
     CheckCircle2,
-    Info
+    Info,
+    Camera,
+    ImagePlus,
+    RefreshCw
 } from 'lucide-react';
 import { studentApi } from '../services/api';
 import toast from 'react-hot-toast';
@@ -44,6 +47,14 @@ export default function SafetyPage() {
     const [reportDescription, setReportDescription] = useState('');
     const [reportSubmitting, setReportSubmitting] = useState(false);
     const [submittedId, setSubmittedId] = useState(null);
+
+    // Camera State
+    const [cameraOpen, setCameraOpen] = useState(false);
+    const [capturedPhoto, setCapturedPhoto] = useState(null); // base64 data URL
+    const [cameraStream, setCameraStream] = useState(null);
+    const videoRef = useRef(null);
+    const canvasRef = useRef(null);
+    const fileInputRef = useRef(null);
 
     // Mental Health Chat State
     const [mhMessages, setMhMessages] = useState([
@@ -138,6 +149,52 @@ export default function SafetyPage() {
         }
     };
 
+    const openCamera = async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+            setCameraStream(stream);
+            setCameraOpen(true);
+            // Attach stream to video element after state update
+            setTimeout(() => {
+                if (videoRef.current) {
+                    videoRef.current.srcObject = stream;
+                    videoRef.current.play();
+                }
+            }, 100);
+        } catch (err) {
+            toast.error('Camera access denied. Please allow camera permission or upload a photo instead.');
+        }
+    };
+
+    const closeCamera = () => {
+        if (cameraStream) {
+            cameraStream.getTracks().forEach(t => t.stop());
+            setCameraStream(null);
+        }
+        setCameraOpen(false);
+    };
+
+    const capturePhoto = () => {
+        const video = videoRef.current;
+        const canvas = canvasRef.current;
+        if (!video || !canvas) return;
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvas.getContext('2d').drawImage(video, 0, 0);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        setCapturedPhoto(dataUrl);
+        closeCamera();
+        toast.success('Photo captured!');
+    };
+
+    const handleFileUpload = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => setCapturedPhoto(ev.target.result);
+        reader.readAsDataURL(file);
+    };
+
     const handleReport = async (e) => {
         e.preventDefault();
         if (!reportCategory || !reportDescription.trim()) return;
@@ -146,16 +203,18 @@ export default function SafetyPage() {
         try {
             const res = await studentApi.submitAnonymousReport({
                 category: reportCategory,
-                description: reportDescription
+                description: reportDescription,
+                photo_url: capturedPhoto || null,
             });
             if (res.success) {
                 setSubmittedId(res.report_id);
                 setReportDescription('');
                 setReportCategory('');
-                toast.success("Report Submitted Anonymously");
+                setCapturedPhoto(null);
+                toast.success('Report Submitted Anonymously');
             }
         } catch (err) {
-            toast.error("Failed to submit report");
+            toast.error('Failed to submit report');
         } finally {
             setReportSubmitting(false);
         }
@@ -409,6 +468,84 @@ export default function SafetyPage() {
                                         <div className="text-right text-[10px] font-bold text-content-muted">
                                             {reportDescription.length} / 500 characters
                                         </div>
+                                    </div>
+
+                                    {/* Camera / Photo Attachment */}
+                                    <div className="space-y-3">
+                                        <label className="text-xs font-bold text-content-muted uppercase tracking-widest">Attach Evidence Photo <span className="text-content-muted/50 normal-case font-normal">(optional)</span></label>
+
+                                        {/* Camera live view */}
+                                        {cameraOpen && (
+                                            <div className="relative rounded-2xl overflow-hidden border border-line bg-black">
+                                                <video ref={videoRef} className="w-full rounded-2xl" autoPlay playsInline muted />
+                                                <canvas ref={canvasRef} className="hidden" />
+                                                <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-4">
+                                                    <button
+                                                        type="button"
+                                                        onClick={capturePhoto}
+                                                        className="w-16 h-16 rounded-full bg-white border-4 border-accent shadow-xl flex items-center justify-center hover:scale-105 transition-transform"
+                                                    >
+                                                        <Camera size={24} className="text-accent" />
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={closeCamera}
+                                                        className="w-10 h-10 rounded-full bg-surface-card/80 border border-line flex items-center justify-center hover:bg-surface-hover transition-colors self-center"
+                                                    >
+                                                        <X size={16} className="text-content-muted" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Captured preview */}
+                                        {capturedPhoto && !cameraOpen && (
+                                            <div className="relative rounded-2xl overflow-hidden border border-accent/30">
+                                                <img src={capturedPhoto} alt="Evidence" className="w-full max-h-56 object-cover rounded-2xl" />
+                                                <div className="absolute top-3 right-3 flex gap-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={openCamera}
+                                                        title="Retake"
+                                                        className="p-2 rounded-full bg-surface-card/90 border border-line hover:bg-surface-hover transition-colors"
+                                                    >
+                                                        <RefreshCw size={14} className="text-content-muted" />
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setCapturedPhoto(null)}
+                                                        title="Remove"
+                                                        className="p-2 rounded-full bg-surface-card/90 border border-line hover:bg-danger/20 transition-colors"
+                                                    >
+                                                        <X size={14} className="text-danger" />
+                                                    </button>
+                                                </div>
+                                                <div className="absolute bottom-3 left-3 bg-success/90 text-white text-[10px] font-bold px-2 py-1 rounded-full">📎 Photo attached</div>
+                                            </div>
+                                        )}
+
+                                        {/* Buttons when no photo yet */}
+                                        {!capturedPhoto && !cameraOpen && (
+                                            <div className="flex gap-3">
+                                                <button
+                                                    type="button"
+                                                    onClick={openCamera}
+                                                    className="flex-1 flex items-center justify-center gap-2 border border-dashed border-line rounded-xl py-4 text-sm text-content-muted hover:border-accent/50 hover:text-accent hover:bg-accent/5 transition-all"
+                                                >
+                                                    <Camera size={18} />
+                                                    Open Camera
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => fileInputRef.current?.click()}
+                                                    className="flex-1 flex items-center justify-center gap-2 border border-dashed border-line rounded-xl py-4 text-sm text-content-muted hover:border-accent/50 hover:text-accent hover:bg-accent/5 transition-all"
+                                                >
+                                                    <ImagePlus size={18} />
+                                                    Upload Photo
+                                                </button>
+                                                <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
+                                            </div>
+                                        )}
                                     </div>
 
                                     <button

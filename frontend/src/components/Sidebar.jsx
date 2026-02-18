@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink, Link, useLocation, useNavigate } from 'react-router-dom';
+import ProfileAvatar from './ProfileAvatar';
+import toast from 'react-hot-toast';
 import {
     LayoutDashboard,
     MessageSquare,
@@ -10,7 +12,10 @@ import {
     Menu,
     X,
     Shield,
-    CreditCard
+    CreditCard,
+    LogOut,
+    UserCheck,
+    Database
 } from 'lucide-react';
 
 const navItems = [
@@ -18,14 +23,34 @@ const navItems = [
     { path: '/chat', icon: MessageSquare, label: 'Chat' },
     { path: '/documents', icon: FileUp, label: 'Documents' },
     { path: '/roommates', icon: Users, label: 'Roommates' },
+    { path: '/mentors', icon: UserCheck, label: 'Find Mentor' },
     { path: '/safety', icon: Shield, label: 'Safety & Help' },
     { path: '/payment', icon: CreditCard, label: 'Fees & Payments' },
     { path: '/acad', icon: GraduationCap, label: 'AcademAI' },
+    { path: '/admin', icon: Database, label: 'Administrative' },
 ];
 
 export default function Sidebar() {
     const [mobileOpen, setMobileOpen] = useState(false);
     const location = useLocation();
+    const navigate = useNavigate();
+    const [studentName, setStudentName] = useState(localStorage.getItem('cc_student_name') || 'Demo Student');
+
+    React.useEffect(() => {
+        const handleProfileUpdate = () => {
+            setStudentName(localStorage.getItem('cc_student_name') || 'Demo Student');
+        };
+        window.addEventListener('profile-updated', handleProfileUpdate);
+        return () => window.removeEventListener('profile-updated', handleProfileUpdate);
+    }, []);
+
+    const handleLogout = () => {
+        localStorage.removeItem('cc_student_id');
+        toast.success("Logged out successfully", {
+            style: { background: '#1e293b', color: '#f1f5f9', border: '1px solid #334155' }
+        });
+        navigate('/login');
+    };
 
     return (
         <>
@@ -57,6 +82,13 @@ export default function Sidebar() {
                             {item.label}
                         </NavLink>
                     ))}
+                    <button
+                        onClick={handleLogout}
+                        className="w-full flex items-center gap-3 px-6 py-3 text-sm text-danger hover:bg-danger/10 transition-colors"
+                    >
+                        <LogOut size={18} />
+                        Logout
+                    </button>
                 </div>
             )}
 
@@ -87,9 +119,22 @@ export default function Sidebar() {
                     ))}
                 </nav>
 
-                {/* Footer */}
-                <div className="p-4 border-t border-line">
-                    <p className="text-xs text-content-muted">TCET Mumbai • 2024-28</p>
+                {/* Student Profile Footer */}
+                <div className="p-4 border-t border-line space-y-2">
+                    <Link to="/profile" className="flex items-center gap-3 p-2 rounded-xl hover:bg-surface-hover transition-all">
+                        <ProfileAvatar studentId="demo_student" size="small" />
+                        <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold truncate">{studentName}</p>
+                            <p className="text-[10px] text-content-muted uppercase font-black">View Profile</p>
+                        </div>
+                    </Link>
+                    <button
+                        onClick={handleLogout}
+                        className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-danger hover:bg-danger/10 transition-colors"
+                    >
+                        <LogOut size={18} />
+                        Logout
+                    </button>
                 </div>
             </aside>
         </>

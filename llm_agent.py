@@ -27,6 +27,33 @@ SUPPORTED_LANGUAGES = {
     "pa": "Punjabi",
 }
 
+TRANSLATIONS = {
+    "escalation": {
+        "en": "I want to make sure you get the best help, {name}. Let me connect you with our admin team. [Click here to chat with admin →]",
+        "hi": "{name}, मैं यह सुनिश्चित करना चाहता हूँ कि आपको सबसे अच्छी मदद मिले। मुझे आपको हमारी एडमिन टीम से जोड़ने दें। [एडमिन के साथ चैट करने के लिए यहाँ क्लिक करें →]",
+        "mr": "{name}, मला खात्री करायची आहे की तुम्हाला सर्वोत्तम मदत मिळेल. मला तुम्हाला आमच्या ॲडमिन टीमशी जोडू द्या. [ॲडमिनशी चॅट करण्यासाठी येथे क्लिक करा →]",
+        "ta": "{name}, உங்களுக்கு சிறந்த உதவி கிடைப்பதை நான் உறுதி செய்ய விரும்புகிறேன். உங்களை எங்கள் நிர்வாகக் குழுவுடன் இணைக்கிறேன். [நிர்வாகத்துடன் அரட்டையடிக்க இங்கே கிளிக் செய்யவும் →]",
+        "te": "{name}, మీకు ఉత్తమమైన సహాయం అందుతుందని నేను నిర్ధారించుకోవాలనుకుంటున్నాను. మిమ్మల్ని మా అడ్మిన్ టీమ్‌తో కనెక్ట్ చేయనివ్వండి. [అడ్మిన్‌తో చాట్ చేయడానికి ఇక్కడ క్లిక్ చేయండి →]",
+        "kn": "{name}, ನಿಮಗೆ ಉತ್ತಮ ಸಹಾಯ ಸಿಗುವಂತೆ ನಾನು ಖಚಿತಪಡಿಸಿಕೊಳ್ಳಲು ಬಯಸುತ್ತೇನೆ. ನಮ್ಮ ನಿರ್ವಾಹಕ ತಂಡದೊಂದಿಗೆ ನಿಮ್ಮನ್ನು ಸಂಪರ್ಕಿಸಲು ನನಗೆ ಅನುಮತಿ ನೀಡಿ. [ನಿರ್ವಾಹಕರೊಂದಿಗೆ ಚಾಟ್ ಮಾಡಲು ಇಲ್ಲಿ ಕ್ಲಿಕ್ ಮಾಡಿ →]",
+        "bn": "{name}, আমি নিশ্চিত করতে চাই যে আপনি সেরা সাহায্য পাচ্ছেন। আমাকে আপনাকে আমাদের অ্যাডमिन টিমের সাথে সংযোগ করতে দিন। [অ্যাডমিনের সাথে চ্যাট করতে এখানে ক্লিক করুন →]",
+        "gu": "{name}, હું એ સુનિશ્ચિત કરવા માંગુ છું કે તમને શ્રેષ્ઠ મદદ મળે. મને તમને અમારી એડમિન ટીમ સાથે જોડવા દો. [એડમિન સાથે ચેટ કરવા માટે અહીં ક્લિક કરો →]",
+        "ml": "{name}, നിങ്ങൾക്ക് മികച്ച സഹായം ലഭിക്കുന്നുണ്ടെന്ന് എനിക്ക് ഉറപ്പാക്കണം. ഞങ്ങളുടെ അഡ്മിൻ ടീമുമായി നിങ്ങളെ ബന്ധിപ്പിക്കാൻ എന്നെ അനുവദിക്കൂ. [അഡ്മിനുമായി ചാറ്റ് ചെയ്യാൻ ഇവിടെ ക്ലിക്ക് ചെയ്യുക →]",
+        "pa": "ਮੈਂ ਇਹ ਯਕੀਨੀ ਬਣਾਉਣਾ ਚਾਹੁੰਦਾ ਹਾਂ ਕਿ ਤੁਹਾਨੂੰ ਸਭ ਤੋਂ ਵਧੀਆ ਮਦਦ ਮਿਲੇ। ਮੈਨੂੰ ਤੁਹਾਨੂੰ ਸਾਡੀ ਐਡਮਿਨ ਟੀਮ ਨਾਲ ਜੋੜਨ ਦਿਓ। [ਐਡਮਿਨ ਨਾਲ ਗੱਲਬਾਤ ਕਰਨ ਲਈ ਇੱਥੇ ਕਲਿੱਕ ਕਰੋ →]"
+    },
+    "offline": {
+        "en": "I'm currently in offline mode and can't answer that right now.",
+        "hi": "मैं अभी ऑफ़लाइन मोड में हूँ और अभी इसका जवाब नहीं दे सकता।",
+        "mr": "मी सध्या ऑफलाइन मोडमध्ये आहे आणि आता त्याचे उत्तर देऊ शकत नाही.",
+        "ta": "நான் தற்போது ஆஃப்லைன் பயன்முறையில் உள்ளேன், இப்போது அதற்குப் பதிலளிக்க முடியாது.",
+        "te": "నేను ప్రస్తుతం ఆఫ్‌లైన్ మోడ్‌లో ఉన్నాను మరియు ఇప్పుడు దానికి సమాధానం చెప్పలేను.",
+        "kn": "ನಾನು ಪ್ರಸ್ತುತ ಆಫ್‌ಲೈನ್ ಮೋಡ್‌ನಲ್ಲಿದ್ದೇನೆ ಮತ್ತು ಈಗ ಅದಕ್ಕೆ ಉತ್ತರಿಸಲು ಸಾಧ್ಯವಿಲ್ಲ.",
+        "bn": "আমি বর্তমানে অফলাইন মোডে আছি এবং এখন সেটির ಉತ್ತರ দিতে পারছি না।",
+        "gu": "હું અત્યારે ઓફલાઇન મોડમાં છું અને અત્યારે તેનો જવાબ આપી શકતો નથી.",
+        "ml": "ഞാൻ ഇപ്പോൾ ഓഫ്‌ലൈൻ മോഡിലാണ്, ഇപ്പോൾ അതിന് മറുപടി നൽകാൻ കഴിയില്ല.",
+        "pa": "ਮੈਂ ਇਸ ਵੇਲੇ ਆਫਲਾਈਨ ਮੋਡ ਵਿੱਚ ਹਾਂ ਅਤੇ ਹੁਣੇ ਇਸਦਾ ਜਵਾਬ ਨਹੀਂ ਦੇ ਸਕਦਾ।"
+    }
+}
+
 # Language detection keywords (simple heuristic)
 LANGUAGE_HINTS = {
     "hi": ["kya", "kaise", "mujhe", "hai", "kab", "kitna", "batao", "chahiye", "hota", "mein"],
@@ -91,13 +118,17 @@ FORBIDDEN:
         rag_results = self.rag.search(message, top_k=5)
         knowledge_context = self._format_rag_context(rag_results)
 
-        # 4. Smart Fallback Detection (Fix #6)
+        # 4. Smart Fallback Detection
         if self._should_fallback(message, rag_results, intent):
             name = context.get('name', 'Student') if context else 'Student'
-            fallback_text = f"I want to make sure you get the best help, {name}. Let me connect you with our admin team. [Click here to chat with admin →]"
-            ai_msg_id = self.sessions.add_message(student_id, "ai", fallback_text)
+            
+            # Use translation if available, otherwise fallback to English
+            fallback_template = TRANSLATIONS["escalation"].get(language, TRANSLATIONS["escalation"]["en"])
+            response_text = fallback_template.format(name=name)
+            
+            ai_msg_id = self.sessions.add_message(student_id, "ai", response_text)
             return {
-                "response": fallback_text,
+                "response": response_text,
                 "message_id": ai_msg_id,
                 "sources": ["human_support"],
                 "intent": intent,
@@ -145,7 +176,7 @@ FORBIDDEN:
                 ai_text = self._fallback_response(intent, language)
 
         except requests.exceptions.ConnectionError:
-            ai_text = "⚠️ The AI model is currently offline. Please make sure Ollama is running (`ollama serve`). In the meantime, you can browse the Documents and Dashboard sections for information."
+            ai_text = self._get_offline_response(language)
         except Exception as e:
             print(f"LLM error: {e}")
             ai_text = self._fallback_response(intent, language)
@@ -164,12 +195,12 @@ FORBIDDEN:
         }
 
     def _should_fallback(self, query: str, rag_results: List[Dict], intent: str) -> bool:
-        """Decide if query needs human support (Fix #6)."""
-        # Low relevancy from RAG (Fix #6 threshold)
-        if not rag_results or rag_results[0].get("score", 0) < 0.6:
+        """Decide if query needs human support."""
+        # Only fallback if RAG returns nothing at all
+        if not rag_results:
             return True
 
-        # Sensitive topics & Complaints (Fix #6)
+        # Sensitive topics & Complaints
         complaints = ['complaint', 'issue', 'problem', 'wrong', 'rejected', 'error', 'stuck', 'missing', 'lost']
         if any(word in query.lower() for word in complaints):
             return True
@@ -249,6 +280,27 @@ You help with: documents, fees, courses, hostel, timetable.""")
                 context_parts.append(r["text"])
 
         return "\n---\n".join(context_parts) if context_parts else ""
+
+    def _get_offline_response(self, language: str) -> str:
+        """Provide a polite offline response in the correct language."""
+        return TRANSLATIONS["offline"].get(language, TRANSLATIONS["offline"]["en"])
+
+    def _get_help_response(self, name: str, category: str, content: str, rag_results: List[Dict]) -> str:
+        """Generate a helper response using RAG data."""
+        # Clean up markdown headers if present
+        content = re.sub(r'^#+\s+', '', content)
+        
+        # Limit content length and add ellipses if needed
+        max_len = 500
+        display_content = content[:max_len] + "..." if len(content) > max_len else content
+
+        response = f"Hi {name}! 👋 Regarding **{category}**, here is what I found:\n\n{display_content}"
+        
+        if len(rag_results) > 1:
+            more_topics = ", ".join([r['category'].replace('_', ' ').title() for r in rag_results[1:3]])
+            response += f"\n\nI also have information on related topics like {more_topics}. Let me know if you'd like to dive into those!"
+            
+        return response
 
     def _get_greeting(self, context: Optional[Dict], language: str) -> str:
         """Generate a personalized greeting."""

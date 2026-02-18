@@ -1,17 +1,98 @@
 @import "tailwindcss";
 
 @theme {
-  --color-surface: #0f172a;
-  --color-surface-card: #1e293b;
-  --color-surface-hover: #273548;
-  --color-line: #334155;
-  --color-accent: #6366f1;
-  --color-accent-hover: #818cf8;
+  --color-surface: #0a101f;
+  --color-surface-card: #161e31;
+  --color-surface-hover: #1e293b;
+  --color-line: #1e293b;
+  --color-accent: #06b6d4;
+  --color-accent-hover: #22d3ee;
   --color-content: #f1f5f9;
   --color-content-muted: #94a3b8;
-  --color-success: #22c55e;
+  --color-success: #10b981;
   --color-warning: #f59e0b;
   --color-danger: #ef4444;
+
+  /* Tropical Theme */
+  --color-jungle-900: #064e3b;
+  --color-jungle-800: #065f46;
+  --color-ocean-500: #06b6d4;
+  --color-ocean-600: #0891b2;
+  --color-sand-500: #f59e0b;
+  --color-sand-600: #d97706;
+  --color-coral-500: #ec4899;
+}
+
+@layer utilities {
+  .snap-y-mandatory {
+    scroll-snap-type: y mandatory;
+  }
+
+  .snap-start {
+    scroll-snap-align: start;
+  }
+}
+
+@keyframes flow {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+
+  50% {
+    transform: translate(-5%, 5%) scale(1.1);
+  }
+
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+}
+
+@keyframes float {
+  0% {
+    transform: translateY(0px) rotate(0deg);
+  }
+
+  50% {
+    transform: translateY(-20px) rotate(5deg);
+  }
+
+  100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+}
+
+@keyframes bubble {
+  0% {
+    transform: translateY(100vh) scale(0);
+    opacity: 0;
+  }
+
+  50% {
+    opacity: 0.5;
+  }
+
+  100% {
+    transform: translateY(-10vh) scale(1);
+    opacity: 0;
+  }
+}
+
+.animate-flow {
+  animation: flow 20s ease-in-out infinite;
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+.mesh-gradient {
+  background: radial-gradient(at 0% 0%, var(--color-jungle-900) 0, transparent 50%),
+    radial-gradient(at 50% 0%, var(--color-ocean-600) 0, transparent 50%),
+    radial-gradient(at 100% 0%, var(--color-sea-teal) 0, transparent 50%),
+    radial-gradient(at 0% 100%, var(--color-jungle-800) 0, transparent 50%),
+    radial-gradient(at 50% 100%, var(--color-ocean-500) 0, transparent 50%),
+    radial-gradient(at 100% 100%, var(--color-sea-teal) 0, transparent 50%);
+  background-color: #020617;
 }
 
 * {
