@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #f1f5f9; padding: 20px; }
+        .container { max-width: 600px; margin: 0 auto; background: #1e293b; border-radius: 12px; padding: 40px; border: 1px solid #334155; }
+        .header { text-align: center; margin-bottom: 30px; }
+        .logo { font-size: 24px; font-weight: bold; color: #6366f1; }
+        .success-icon { font-size: 48px; color: #10b981; margin: 20px 0; }
+        .amount { font-size: 36px; font-weight: 800; color: #fff; margin: 10px 0; }
+        .details { border-top: 1px solid #334155; margin-top: 20px; padding-top: 20px; }
+        .detail-row { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 14px; }
+        .footer { text-align: center; margin-top: 40px; font-size: 12px; color: #64748b; }
+        .btn { display: inline-block; background: #6366f1; color: #fff; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: bold; margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">TCET CampusCompanion</div>
+            <div class="success-icon">✓</div>
+            <h2>Payment Successful</h2>
+            <div class="amount">₹{{amount}}</div>
+            <p>Your fee payment has been confirmed.</p>
+        </div>
+
+        <div class="details">
+            <div class="detail-row">
+                <span>Receipt Number:</span>
+                <span style="color: #fff;">#{{receipt_id}}</span>
+            </div>
+            <div class="detail-row">
+                <span>Payment Date:</span>
+                <span style="color: #fff;">{{date}}</span>
+            </div>
+            <div class="detail-row">
+                <span>Student ID:</span>
+                <span style="color: #fff;">{{student_id}}</span>
+            </div>
+        </div>
+
+        <div style="text-align: center;">
+            <a href="{{receipt_url}}" class="btn">Download Official Receipt</a>
+        </div>
+
+        <div class="footer">
+            &copy; 2024 Thakur College of Engineering & Technology<br>
+            A-Block, Thakur Educational Campus, Kandivali (E), Mumbai - 400101
+        </div>
+    </div>
+</body>
+</html>
