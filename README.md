@@ -367,3 +367,4 @@ Update `VITE_API_URL` in the frontend `.env` to the Ngrok URL.
 <p align="center">
   <sub>Built with ⚡ at TCET • Powered by Local AI</sub>
 </p>
+# campus-campanion
